@@ -3,8 +3,11 @@ import json
 import re
 from pathlib import Path
 
+from guv_capture import template_text
+
 DEFAULT_RULES = Path(__file__).resolve().parent / "examples" / "safety_rules.json"
 HELP = (
+    "GUV 成像可用「GUV成像模板」「开始GUV成像记录 实验名称」。发「复盘本次实验」或「对比上次实验」回看自己的记录。\n"
     "发「通用模板」或「GUV模板」取空白记录。发「安全培训」列出本实例的安全提醒，再按主题查阅。"
     "\n发「开始记录 实验名称」开启草稿，发「记录完成」提交到管理员为本人配置的目录。"
     "\n发「我的编号」查询本人在此应用的 open_id。模型整理会将你的口述和近期单聊上下文发给 DeepSeek。"
@@ -101,6 +104,8 @@ class Courses:
         if query in {"安全培训", "课件目录", "安全课件", "安全课件目录"}:
             titles = [rule["title"] for rule in self.rules]
             return "本实例的提醒主题：" + "、".join(titles) if titles else "管理员尚未配置培训提醒。"
+        if query in {"guv成像模板", "guv成像记录模板", "guv成像空白模板"}:
+            return template_text()
         if "模板" in query and len(query) <= 25 and not re.search("引导|带我|一步步|帮我记|填写|我做了", query):
             name = "GUV" if "guv" in query else "通用"
             return f"【{name}实验记录空白模板】\n{TEMPLATES[name]}"

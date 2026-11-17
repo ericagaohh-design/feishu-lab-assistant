@@ -15,6 +15,20 @@
 
 第三条和原读数都保留在正文中。中途发「查看记录」可以回看草稿。再次发送「记录完成」会返回上一份文档的链接。飞书文件名或本地路径按口述保留为索引；本版本的消息入口是文字单聊。手机上可先用飞书语音转文字再发送。
 
+## GUV 成像记录试用模板 v0.1
+
+发「GUV成像模板」可查看空白模板。「开始GUV成像记录 模拟观察」开启一份成像草稿。每轮只追问一项缺失信息。口述、计划和更正分别保留，原图按成员给出的文件名或位置登记。这些成像记录和复盘指令由本地规则处理，无需模型额度。维护者可编辑 [成像模板字段](guv_imaging_template.json)；每份草稿沿用建档时的模板版本。
+
+```text
+开始GUV成像记录 模拟观察
+A样品拍了3个视野。
+原图叫 A01.tif。
+查看记录
+复盘本次实验
+```
+
+「复盘本次实验」只读本人草稿或最近的已归档记录。「对比上次实验」对照同一成员的两次记录并显示来源，缺乏比较依据时会指出缺口。复盘文本在单聊内生成。想保留本次草稿请发「记录完成」，演练后也可发「取消记录」。
+
 ## 先在本地跑测试
 
 在 macOS 或 Linux 上使用 Python 3.12。测试使用临时目录、虚构的成员和模拟的远端文档，无需飞书账号或 DeepSeek Key。安装 Node.js 可一并运行离线绑定页的 WebCrypto 测试。
@@ -60,5 +74,6 @@ python -m unittest discover -v
 - **LabBuddy** 把研究者的口述转成结构化字段，提示模型仅提取明确说出的内容，并标记尚缺的字段。适合研究如何追问而不补造读数。[字段抽取源码](https://github.com/abeckDev/LabBuddy-SmartLabProtocollationAssistant/blob/6936a938a112ba6adff2cd2fb4d912db0622bfe2/backend/agent.py#L24-L45)
 - **eLabFTW 模板共建库** 展示了实验组如何提交模板、清理机构专属信息和审阅版本差异。[模板贡献指南](https://github.com/sfb1638/elabftw-templates/blob/e1d423c03c2199e01f561c6fa8342b135c3354b4/CONTRIBUTING.md)
 - **飞书官方卡片机器人** 展示如何响应按钮回调并更新卡片。想把文字指令「查看记录」「记录完成」做成按钮，可以从这里读起。[Python 示例](https://github.com/larksuite/lark-samples/blob/de3d8b6d0cac128248df04f98a5eaa6c313e2569/card_interaction_bot/python/main.py)
+- **Experiment-Copilot** 先比较已经记录的条件与指标，再给出有来源的复盘。本项目独立实现了只读、按记录人划分的原文对照。[实验对比实现参考](https://github.com/Aishunyin/Experiment-Copilot/blob/ee2d2d40dc707de270312ae7f52c687f318b72e4/app/agent/tools.py#L169-L234)
 
 本项目采用 [MIT 许可证](LICENSE)。

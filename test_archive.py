@@ -7,6 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from archive import Archive, ArchiveError, Rejected, Wiki
+from bot import Bot
+from lab import Courses
 from state import State
 
 APP, TENANT = "cli_sample_app", "sample_tenant"
@@ -92,6 +94,43 @@ class ArchiveTest(unittest.TestCase):
 
     def command(self, user, text):
         return self.archive.command(self.row(user, text))
+
+    def test_imaging_chat_preview_review_and_save_without_model(self):
+        replies = {}
+        bot = Bot(self.state, Courses(), None, None, "unused", replies.__setitem__,
+                  ask=lambda *args: self.fail("unexpected model call"), archive=self.archive)
+
+        def chat(text):
+            row = self.row("ou_A", text)
+            self.state.enqueue(row["id"], row["user"], text, archive_parent=row["archive_parent"])
+            self.assertTrue(bot.step())
+            self.assertTrue(bot.step())
+            return replies[row["id"]]
+
+        self.assertIn("v0.1", chat("GUV成像模板"))
+        self.assertIn("v0.1", chat("开始GUV成像记录 模拟观察"))
+        self.assertIn("已记入", chat("A样品拍了3个视野，看到少量聚集。"))
+        self.assertIn("DEMO_A01.tif", chat("原图叫 DEMO_A01.tif"))
+        chat("更正：实际拍了2个视野。")
+        self.assertIn("更正", chat("复盘本次实验"))
+        self.assertIn("〔第3条〕更正：实际拍了2个视野", chat("查看记录"))
+        self.assertIn(HOME, chat("记录完成"))
+        node, paragraphs = next(iter(self.wiki.documents.values()))
+        self.assertEqual(node["parent_node_token"], self.parents["ou_A"])
+        self.assertIn("A样品拍了3个视野，看到少量聚集。", paragraphs)
+        self.assertIn("更正：实际拍了2个视野。", paragraphs)
+        self.assertTrue(any("v0.1" in p for p in paragraphs))
+        self.assertIsNone(self.archive.active("ou_A"))
+
+    def test_migration_preserves_existing_notes_without_a_template(self):
+        self.command("ou_A", "开始记录 老记录")
+        self.archive.note(self.row("ou_A", "观察：合成读数。"))
+        with self.state.db() as db:
+            db.execute("ALTER TABLE experiments DROP COLUMN capture_template")
+        self.archive = Archive(self.state, self.wiki, self.routes, APP, TENANT)
+        self.assertIsNone(self.archive.active("ou_A")["capture_template"])
+        self.assertIn("观察：合成读数。", self.command("ou_A", "查看记录"))
+        self.assertIn(HOME, self.command("ou_A", "记录完成"))
 
     def test_missing_routes_disable_archives_but_leave_chat_available(self):
         archive = Archive(self.state, self.wiki, self.routes.with_name("absent.json"), APP, TENANT)

@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from guv_capture import IMAGING_TITLE, START_IMAGING, extract_fields, load_template, summary_lines, template_name
 from archive_visibility import VisibilityError, restrict_and_verify
 
 WIKI_BASE = re.compile(
@@ -184,6 +185,9 @@ class Archive:
               CREATE TABLE IF NOT EXISTS experiment_notes(
                 message TEXT PRIMARY KEY, experiment TEXT NOT NULL, stamp TEXT NOT NULL, content TEXT NOT NULL);
             """)
+            columns = {row["name"] for row in db.execute("PRAGMA table_info(experiments)")}
+            if "capture_template" not in columns:
+                db.execute("ALTER TABLE experiments ADD COLUMN capture_template TEXT")
 
     def route(self, sender):
         found = {tuple(self.routes[key][f] for f in ("parent", "name"))
@@ -226,6 +230,11 @@ class Archive:
         result.extend(["固定字段摘要（按口述顺序，补充与更正见原文）",
                        "记录成员（飞书账号）：" + record["name"],
                        "首次口述日期（北京时间）：" + (notes[0]["stamp"][:10] if notes else "待补")])
+        if record["capture_template"]:
+            template = json.loads(record["capture_template"])
+            fields = extract_fields(template, [entry["content"] for entry in notes])
+            result.extend(["实验名称：" + record["title"], *summary_lines(template, fields)])
+            return result
         if not values["实验名称"] and record["title"] != "实验记录":
             values["实验名称"].append("实验名称：" + record["title"])
         for field, entries in values.items():
@@ -238,7 +247,8 @@ class Archive:
 
     def command(self, row):
         user, text, parent = row["user"], row["input"].strip().rstrip("。！？!"), row["archive_parent"]
-        start = START.fullmatch(text)
+        imaging_start = START_IMAGING.fullmatch(text)
+        start = imaging_start or START.fullmatch(text)
         if not start and text not in {"归档说明", "如何归档", "实验记录目录", "查看记录", "取消记录", "记录完成", "结束记录", "保存实验记录"}:
             return None
         if self.wiki_base is None:
@@ -254,12 +264,16 @@ class Archive:
         if start:
             if current:
                 return "你已有一份正在处理的记录：" + current["title"] + "。\n" + HELP
-            title = start[1] or "实验记录"
+            title = start[1] or ("GUV 成像记录" if imaging_start else "实验记录")
+            template = load_template() if imaging_start or IMAGING_TITLE.search(title) else None
+            snapshot = json.dumps(template, ensure_ascii=False) if template else None
             name = next(route["name"] for route in self.routes.values() if route["parent"] == parent)
             ident = uuid.uuid4().hex
             with self.state.db() as db:
-                db.execute("INSERT INTO experiments(id,user,parent,name,title) VALUES(?,?,?,?,?)", (ident,user,parent,name,title))
-            return f"已开始「{title}」。请逐条口述实际操作、测量或更正。收到「记录完成」后会保存至「{name}｜实验记录」，沿用目录的阅读权限。"
+                db.execute("INSERT INTO experiments(id,user,parent,name,title,capture_template) VALUES(?,?,?,?,?,?)",
+                           (ident, user, parent, name, title, snapshot))
+            kind = "已选用" + template_name(template) + "。可以直接说样品、视野和原图文件名。" if template else "请逐条口述实际操作、测量或更正。"
+            return f"已开始「{title}」。{kind}收到「记录完成」后会保存至「{name}｜实验记录」，沿用目录的阅读权限。"
         if not current:
             if text in {"记录完成", "结束记录", "保存实验记录"}:
                 with self.state.db() as db:
