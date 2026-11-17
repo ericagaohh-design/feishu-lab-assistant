@@ -1,0 +1,24 @@
+name: 记录助手反馈
+description: 用一条模拟对话说明希望改进的行为。
+title: "[反馈] "
+body:
+  - type: markdown
+    attributes:
+      value: "这里的内容对所有人可见。请用虚构的样品、读数和文件名。内部课件、真实记录、下载凭证和个人 Key 请留在组内。"
+  - type: textarea
+    id: input
+    attributes:
+      label: 你会对助手说什么？
+      placeholder: "例如：样品 DEMO-01，读数 10.0 g。"
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: 助手现在怎么回复？
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你希望助手怎么回复或记录？
+    validations:
+      required: true

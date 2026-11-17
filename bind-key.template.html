@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<title>绑定个人 DeepSeek Key</title>
+<style>
+* { box-sizing: border-box } body { max-width: 43rem; margin: 3rem auto; padding: 0 1.1rem; line-height: 1.65; color: #182d33; background: #fbfcfa; font: 16px/1.65 system-ui,sans-serif }
+h1 { line-height: 1.3; font-size: 1.75rem } label { display: block; margin: 1.3rem 0 .25rem; font-weight: 650 } textarea,input { width: 100%; border: 1px solid #758888; border-radius: 6px; padding: .7rem; font: 1rem system-ui; background: white } textarea { resize: vertical } button { margin: .7rem .5rem 0 0; background: #18524f; color: white; border: 0; padding: .7rem 1.1rem; border-radius: 5px; cursor: pointer; font-size: 1rem } button:disabled { opacity: .48 } [role=status] { min-height: 1.6em; margin: .45rem 0 } .help { color: #405753 }
+</style>
+</head>
+<body><main>
+<h1>绑定个人 DeepSeek API Key</h1>
+<p>完成一次绑定后，以后在飞书里让实验助手整理记录，模型费用就记到你自己的 DeepSeek 账号。只查安全课件或拿空白模板，可以直接回飞书使用。</p>
+<p>请从本组管理员提供的链接下载此文件，双击用浏览器打开。每份文件只接受对应机器人实例的绑定码。</p>
+<label for="challenge">① 粘贴飞书机器人给你的绑定码</label>
+<p class="help">在你信任的实验助手的单聊里发“绑定个人Key”，从回复中复制以 LAB1. 开头的完整一行。绑定码十分钟有效。</p>
+<textarea id="challenge" rows="3" placeholder="LAB1.…" spellcheck="false" autocomplete="off"></textarea>
+<label for="key">② 粘贴你自己的 DeepSeek API Key</label>
+<p class="help">这是 DeepSeek 发给你的密钥，以 sk- 开头。第一次使用，请登录<a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">DeepSeek 官方密钥管理页</a>，创建并复制一个 API Key。只把原始 Key 填进下面的密码框。</p>
+<input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…">
+<button type="button" id="generate">生成加密凭证</button>
+<p role="status" id="status" aria-live="polite"></p>
+<label for="result">③ 复制凭证，发回原来的飞书单聊</label>
+<p class="help">点“生成加密凭证”后，下框会出现以“绑定凭证”开头的文字。点“复制凭证”，回飞书粘贴并发送。等机器人回复已保存，手机和电脑都能用。</p>
+<textarea id="result" rows="4" readonly></textarea>
+<button type="button" id="copy" disabled>复制凭证</button>
+<p class="help">文件在本机加密，机器人保存加密的 Key，之后代表你调用模型。要解除绑定，在同一单聊发送“解绑个人Key”。</p>
+</main>
+<script>
+'use strict';
+const APP_ID = '__APP_ID__';
+const PUBLIC_MODULUS = '__PUBLIC_MODULUS__';
+const encoder = new TextEncoder();
+const get = id => document.getElementById(id);
+const input = get('key'), challenge = get('challenge'), result = get('result'), status = get('status');
+const copy = get('copy'), generate = get('generate');
+function decode64(value) {
+  return Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0));
+}
+function encode64(bytes) {
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+function clearResult() {
+  copy.disabled = true;
+  result.value = '';
+  status.textContent = '';
+}
+challenge.addEventListener('input', clearResult);
+input.addEventListener('input', clearResult);
+generate.addEventListener('click', async () => {
+  clearResult();
+  if (location.protocol !== 'file:' || !crypto.subtle) {
+    status.textContent = '请下载 HTML 文件后，用电脑浏览器从本地打开。';
+    return;
+  }
+  const key = input.value.trim(), bundle = challenge.value.trim();
+  if (!/^sk-[A-Za-z0-9_-]{16,180}$/.test(key)) {
+    status.textContent = '请核对 DeepSeek 开放平台生成的完整 Key。';
+    return;
+  }
+  if (!/^LAB1\.[A-Za-z0-9_-]{200,1600}$/.test(bundle)) {
+    status.textContent = '请从你和机器人的单聊中复制完整绑定码。';
+    return;
+  }
+  generate.disabled = true;
+  try {
+    const data = JSON.parse(new TextDecoder().decode(decode64(bundle.slice('LAB1.'.length))));
+    if (data.v !== 1 || data.a !== APP_ID || data.n !== PUBLIC_MODULUS || !/^[A-Za-z0-9_-]{32}$/.test(data.c) ||
+        !/^[A-Za-z0-9_-]{512}$/.test(data.n) || data.e !== 'AQAB' || !Number.isSafeInteger(data.x)) throw new Error();
+    if (Date.now() >= data.x * 1000) {
+      status.textContent = '绑定码已过期。请在飞书重新发送“绑定个人Key”。';
+      return;
+    }
+    const pub = await crypto.subtle.importKey('jwk', {kty:'RSA', n:data.n, e:data.e, ext:true},
+      {name:'RSA-OAEP', hash:'SHA-256'}, false, ['encrypt']);
+    const payload = encoder.encode(JSON.stringify({v:1, c:data.c, k:key}));
+    const encrypted = await crypto.subtle.encrypt({name:'RSA-OAEP', label:encoder.encode('Lab-Feishu-Enrollment-v1')}, pub, payload);
+    result.value = '绑定凭证 ' + encode64(new Uint8Array(encrypted));
+    input.value = '';
+    copy.disabled = false;
+    status.textContent = '已加密。请仅将下方整段凭证发回给你绑定码的机器人。';
+  } catch {
+    status.textContent = '无法读取绑定码，请在同一机器人单聊重新获取。';
+  } finally {
+    generate.disabled = false;
+  }
+});
+copy.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(result.value);
+    status.textContent = '凭证已复制，可粘贴回飞书单聊。';
+  } catch {
+    result.focus(); result.select();
+    status.textContent = '已选中凭证，请使用系统复制快捷键。';
+  }
+});
+</script></body></html>

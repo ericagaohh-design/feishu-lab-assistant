@@ -1,0 +1,13 @@
+{
+  "app_id": "cli_example_app",
+  "tenant_key": "example_tenant",
+  "space_id": "1234567890123456789",
+  "member_root": "ExampleMemberDirectory",
+  "wiki_base_url": "https://example.feishu.cn/wiki/",
+  "routes": {
+    "open_id:ou_example_member": {
+      "parent": "ExampleIndividualDirectory",
+      "name": "示例成员"
+    }
+  }
+}
