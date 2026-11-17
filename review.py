@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 
 from archive import FIELD_SEPARATOR, SUMMARY_LABELS, TOKEN
-from guv_capture import extract_fields, load_template
+from guv_capture import ACTUAL, HYPOTHESIS, PENDING, PLAN, extract_fields, load_template
 
 LOG = logging.getLogger("lab.review")
 REVIEW = {"复盘本次实验", "复盘这次实验", "复盘本次记录", "实验复盘"}
@@ -133,14 +133,35 @@ def _list_evidence(entries, label):
     return "、".join(excerpts)
 
 
+def _reported_count_phrases(text):
+    for sentence in re.finditer(r"([^。；;！？!?\n]+)([。；;！？!?\n]?)", text):
+        body, end = sentence.groups()
+        if end in {"?", "？"} or body.rstrip().endswith(("吗", "么")):
+            continue
+        parts = []
+        deferred = False
+        for clause in re.split(r"(?<=[，,])", body):
+            if any(rule.search(clause) for rule in (PLAN, HYPOTHESIS, PENDING, UNSET_BASIS)):
+                if parts:
+                    yield "".join(parts).strip(" ，,")
+                    parts = []
+                deferred = True
+            elif ACTUAL.match(clause.strip()) or re.match(r"\s*(?:更正|修正|纠正|观察[：:]|结果[：:])", clause):
+                deferred = False
+            if not deferred:
+                parts.append(clause)
+        if parts:
+            yield "".join(parts).strip(" ，,")
+
+
 def _count_basis(texts):
     found = {}
     revised = False
     for number, text in enumerate(texts, 1):
         # Keep clauses in the same sentence together so a count can name its denominator later.
-        for sentence in re.split(r"[。；;\n]", text):
+        for sentence in _reported_count_phrases(text):
             basis = set(COUNT_BASIS.findall(sentence))
-            if not basis or UNSET_BASIS.search(sentence):
+            if not basis:
                 continue
             corrected = bool(REVISED_BASIS.search(sentence))
             if not corrected and not COUNT_MENTION.search(sentence):

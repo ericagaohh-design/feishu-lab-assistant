@@ -42,6 +42,17 @@ class CaptureTest(unittest.TestCase):
         self.assertEqual(fields["background"], [(1, "上批 A样品拍了2个视野")])
         self.assertEqual(fields["location"], [(1, "这次 A样品拍了1个视野")])
 
+    def test_unlabelled_vesicle_counts_need_a_counted_object(self):
+        actual = ["F01 有 5 个囊泡", "F01 可辨囊泡 6 个", "GUV 数量为 5 个"]
+        others = ["F01 拍了 5 个视野", "A样品编号 GUV-005", "5 个 GUV 样品",
+                  "原图叫 F01_5个囊泡.tif", "计数_5个囊泡.tif", "打算找 5 个囊泡",
+                  "假设每个视野有 5 个囊泡", "F01 有 5 个囊泡吗？", "更正：F01 有 4 个囊泡"]
+        fields = extract_fields(self.template, actual + others)
+        self.assertEqual(fields["observation"], list(enumerate(actual, 1)))
+        self.assertTrue(fields["plan"])
+        self.assertTrue(fields["interpretation"])
+        self.assertEqual(fields["correction"][-1][1], others[-1])
+
     def test_sample_demo_groups_sources_and_counts(self):
         notes = ["样品：DEMO-A，批次 DEMO-B01。目的：比较同一样品在孔中心与边缘的可见囊泡。",
                  "计划：拍两个固定视野。实际：在 A1 孔中心拍了 F01，明场，20× 物镜。观察：F01 可辨囊泡 6 个。边缘还没拍。",

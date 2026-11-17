@@ -11,9 +11,14 @@ SAMPLE = re.compile(r"(?:[A-Za-z0-9][\w.-]{0,24}\s*(?:号)?(?:样品|样本|组)
 LOCATION = re.compile(r"(?:[0-9一二两三四五六七八九十]+\s*个?\s*视野|(?:第\s*)?[0-9一二两三四五六七八九十]+\s*号?视野|视野\s*[A-Za-z0-9]+|(?<![A-Za-z0-9_.-])F\d{1,3}(?![A-Za-z0-9_.-])|(?:[A-H]\d{1,2}|\d+号)\s*孔|孔(?:位|号)\s*[A-H]?\d+|中心[区域]?|边缘[区域]?)", re.I)
 ACQUISITION = re.compile(r"明场|暗场|共聚焦|相差|荧光(?:通道|模式|成像)|(?:物镜|镜头|通道|比例尺|像素尺寸)|\d+\s*[xX×倍]\s*物镜")
 OBSERVATION = re.compile(r"观察到|看到|看见|没看到|未见|数到|数了|计数|测得|实测|读数|测了|聚集|聚团|团聚|成团|黏连|粘连|堆叠|重叠|破裂|明显|(?:直径|尺寸)\s*(?:约|为|是)?\s*\d")
+COUNT_NUMBER = r"[0-9零〇一二两三四五六七八九十百千万]+"
+VESICLE_COUNT = re.compile(
+    rf"(?:{COUNT_NUMBER}\s*(?:个|颗|粒)\s*(?:囊泡|GUV)(?![A-Za-z0-9_]|\s*(?:样品|样本|视野|文件))|"
+    rf"(?:囊泡|(?<![A-Za-z0-9_])GUV)(?:\s*(?:数量|个数|总数))?\s*(?:有|为|是|共计|共)?\s*"
+    rf"{COUNT_NUMBER}\s*(?:个|颗|粒)(?!\s*(?:视野|孔|管|样品|样本|文件)))", re.I)
 PENDING = re.compile(r"待补|待测|待填|待定|待确认|不清楚|还没|还未|尚未|回头.{0,8}补|回工位.{0,8}补|随后补|稍后补|没记|记不清|不知道")
-PLAN = re.compile(r"打算|准备|接下来|下一步|计划|预计|明天|将要|想要|拟(?:拍|用|做)")
-HYPOTHESIS = re.compile(r"可能|猜测|怀疑|大概是因为|应该是|推测|似乎是因为|我觉得")
+PLAN = re.compile(r"打算|准备|接下来|下一步|计划|预计|明天|将要|想要|拟(?:拍|用|做|按|以|计数|统计)|预期")
+HYPOTHESIS = re.compile(r"如果|假如|假设|或许|也许|可能|猜测|怀疑|大概是因为|应该是|推测|似乎是因为|我觉得")
 CORRECTION = re.compile(r"更正|纠正|修正|口误|说错|应(?:该)?改为|改成|应该是.+(?:才对|不是)")
 ACTUAL = re.compile(r"^(?:但|不过)?\s*(?:本次|这次|实际|已经|刚才|刚刚|实测|拍到了|观察到)")
 IMAGE_BASENAME = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\.(?:ome\.tiff?|tiff?|czi|lif|nd2|oib|oif|lsm|vsi|oir|png|jpe?g)(?![.A-Za-z0-9])", re.I)
@@ -78,9 +83,12 @@ def extract_fields(template, texts):
                     tags = {label} if label else set()
                     if not label:
                         for key, regex in (("sample", SAMPLE), ("location", LOCATION),
-                                           ("acquisition", ACQUISITION), ("observation", OBSERVATION)):
+                                           ("acquisition", ACQUISITION)):
                             if regex.search(clause):
                                 tags.add(key)
+                        observable = FILENAME.sub("", clause)
+                        if OBSERVATION.search(observable) or VESICLE_COUNT.search(observable):
+                            tags.add("observation")
                         if FILENAME.search(clause) or FILE_REFERENCE.search(clause):
                             tags.add("files")
                     if ("files" in tags and (SAMPLE.search(clause) or LOCATION.search(clause))

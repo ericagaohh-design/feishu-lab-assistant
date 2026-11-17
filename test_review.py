@@ -145,6 +145,19 @@ class MemberReviewTest(unittest.TestCase):
         self.record("A", ["更正：计数分母改为每孔"], True)
         self.assertIn("核对最终采用的分母", self.run_cmd("对比上次实验"))
 
+    def test_only_reported_counts_support_a_denominator_comparison(self):
+        self.record("A", ["每管数到 5 个囊泡"], True)
+        self.record("A", ["打算换一种口径，按每管计数", "假设按每管有 5 个囊泡",
+                          "每管计数 5 个吗？", "观察：F01 有 4 个囊泡"], True)
+        reply = self.run_cmd("对比上次实验")
+        self.assertIn("本次未识别到计数分母", reply)
+        self.assertNotIn("本次出现「每管」", reply)
+        self.record("A", ["打算按每管计数，实际观察到 4 个囊泡，按每视野计数，推测每管有 9 个"])
+        reply = self.run_cmd("对比上次实验")
+        self.assertIn("本次出现「每视野」", reply)
+        self.assertNotIn("本次出现「每管」", reply)
+        self.assertIn("上次未识别到计数分母", reply)
+
     def test_draft_without_reference_and_unlabeled_inputs(self):
         self.record("A", ["当时没留下记录，只记得需要再看原图"])
         a = self.run_cmd("对比上次实验")
