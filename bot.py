@@ -13,7 +13,9 @@ from urllib.error import HTTPError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from enrollment import PersonalEnrollment, is_enrollment_message
+from guv_capture import extract_fields, missing_question
 from lab import Courses, DEFAULT_RULES, EMERGENCY, SECRET, SECRET_NOTICE, SYSTEM
+from review import review_command
 from state import State
 
 LOG = logging.getLogger("lab_assistant")
@@ -88,6 +90,10 @@ class Bot:
             return self.courses.local_answer(text, user, personal=self.personal is not None), None
         tip = self.courses.before_step(text)
         prefix = f"组内安全提醒：{tip}\n\n" if tip else ""
+        result = review_command(self.archive, row, wiki_base=getattr(self.archive, "wiki_base", None),
+                                space_id=getattr(self.archive, "space_id", None))
+        if result is not None:
+            return result, None
         if self.archive is not None:
             command = self.archive.command(row)
             if command is not None:
@@ -97,6 +103,16 @@ class Bot:
             return answer, None
         recorded = self.archive is not None and self.archive.note(row)
         receipt = "已记入本次草稿。发「记录完成」归档。\n" if recorded else ""
+        current = self.archive.active(user) if recorded else None
+        if current is not None and current["capture_template"]:
+            template = json.loads(current["capture_template"])
+            notes = self.archive.entries(current["id"])
+            fields = extract_fields(template, [entry["content"] for entry in notes])
+            matched = [field["label"] for field in template["fields"]
+                       if any(n == len(notes) for n, _ in fields[field["id"]])]
+            detail = "本条摘录归入「" + "、".join(matched) + "」。" if matched else "本条已按原话保留。"
+            question = missing_question(template, fields)
+            return prefix + receipt + detail + ("\n" + question if question else ""), None
         key = self.personal.key_for(user) if self.personal is not None else self.shared_key
         if not key:
             if self.personal is None:
@@ -110,8 +126,7 @@ class Bot:
             else:
                 prefix = ""
         history = self.store.history(user)
-        if recorded:
-            current = self.archive.active(user)
+        if current is not None:
             recent = self.archive.entries(current["id"])[-6:-1]
             history = [{"role": "user", "content": "我为本次记录填写的实验名称：" + current["title"]}]
             history.extend({"role": "user", "content": entry["content"]} for entry in recent)
